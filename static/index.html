@@ -1,0 +1,209 @@
+<!-- fichier: static/index.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum en Temps Réel</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">Forum en Temps Réel</div>
+            <nav class="nav" id="nav-menu">
+                <a href="#" class="nav-link" data-page="home">Accueil</a>
+                <a href="#" class="nav-link" data-page="categories">Catégories</a>
+                <a href="#" class="nav-link auth-required" data-page="messages">Messages</a>
+            </nav>
+            <div class="auth-buttons" id="auth-buttons">
+                <button id="login-button" class="auth-not-required">Connexion</button>
+                <button id="register-button" class="auth-not-required">Inscription</button>
+                <div id="user-info" class="user-info auth-required">
+                    <span id="username"></span>
+                    <button id="logout-button">Déconnexion</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="container">
+            <div class="main-content">
+                <!-- Pages container -->
+                <div id="pages-container">
+                    <!-- Home Page -->
+                    <div id="home-page" class="page active">
+                        <h1>Bienvenue sur le Forum en Temps Réel</h1>
+                        <div id="posts-container" class="posts-container">
+                            <!-- Posts will be loaded here -->
+                            <div class="loading">Chargement des publications...</div>
+                        </div>
+                    </div>
+
+                    <!-- Categories Page -->
+                    <div id="categories-page" class="page">
+                        <h1>Catégories</h1>
+                        <div id="categories-container" class="categories-container">
+                            <!-- Categories will be loaded here -->
+                            <div class="loading">Chargement des catégories...</div>
+                        </div>
+                    </div>
+
+                    <!-- Messages Page -->
+                    <div id="messages-page" class="page auth-required">
+                        <h1>Messages Privés</h1>
+                        <div class="messages-layout">
+                            <div id="users-list" class="users-list">
+                                <!-- Online users will be loaded here -->
+                                <div class="loading">Chargement des utilisateurs...</div>
+                            </div>
+                            <div id="chat-container" class="chat-container">
+                                <div id="chat-header" class="chat-header">
+                                    <h2>Sélectionnez un utilisateur pour discuter</h2>
+                                </div>
+                                <div id="messages-list" class="messages-list">
+                                    <!-- Messages will be loaded here -->
+                                </div>
+                                <div id="typing-indicator" class="typing-indicator hidden">
+                                    <span id="typing-username"></span> est en train d'écrire...
+                                </div>
+                                <div id="message-form" class="message-form hidden">
+                                    <textarea id="message-input" placeholder="Tapez votre message..."></textarea>
+                                    <button id="send-message">Envoyer</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Post Detail Page -->
+                    <div id="post-detail-page" class="page">
+                        <div id="post-detail" class="post-detail">
+                            <!-- Post detail will be loaded here -->
+                            <div class="loading">Chargement de la publication...</div>
+                        </div>
+                        <div id="comments-container" class="comments-container">
+                            <h2>Commentaires</h2>
+                            <div id="comments-list" class="comments-list">
+                                <!-- Comments will be loaded here -->
+                                <div class="loading">Chargement des commentaires...</div>
+                            </div>
+                            <div id="comment-form" class="comment-form auth-required">
+                                <textarea id="comment-input" placeholder="Ajoutez un commentaire..."></textarea>
+                                <button id="post-comment">Commenter</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar auth-required">
+                <div class="sidebar-section">
+                    <h3>Utilisateurs en ligne</h3>
+                    <ul id="online-users" class="online-users-list">
+                        <!-- Online users will be loaded here -->
+                        <li class="loading">Chargement...</li>
+                    </ul>
+                </div>
+                <div class="sidebar-section">
+                    <h3>Nouvelle publication</h3>
+                    <button id="new-post-button" class="new-post-button">Créer une publication</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Connexion</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-identifier">Email ou Pseudo</label>
+                        <input type="text" id="login-identifier" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Mot de passe</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit">Se connecter</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="register-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Inscription</h2>
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="register-username">Pseudo</label>
+                        <input type="text" id="register-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-age">Âge</label>
+                        <input type="number" id="register-age" min="13" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-gender">Genre</label>
+                        <select id="register-gender" required>
+                            <option value="">Sélectionnez</option>
+                            <option value="M">Homme</option>
+                            <option value="F">Femme</option>
+                            <option value="Autre">Autre</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-firstname">Prénom</label>
+                        <input type="text" id="register-firstname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-lastname">Nom</label>
+                        <input type="text" id="register-lastname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Mot de passe</label>
+                        <input type="password" id="register-password" required>
+                    </div>
+                    <button type="submit">S'inscrire</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- New Post Modal -->
+        <div id="new-post-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Nouvelle Publication</h2>
+                <form id="new-post-form">
+                    <div class="form-group">
+                        <label for="post-title">Titre</label>
+                        <input type="text" id="post-title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="post-category">Catégorie</label>
+                        <select id="post-category" required>
+                            <!-- Categories will be loaded here -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="post-content">Contenu</label>
+                        <textarea id="post-content" required></textarea>
+                    </div>
+                    <button type="submit">Publier</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+# Ignorer les fichiers système macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+.tampon.go
+.vscode
+
+# Ignorer les fichiers de sauvegarde de macOS
+*.swp
+*.swo
+
+# Ignorer les fichiers temporaires et de cache
+/private/var/folders/
+/private/var/tmp/
+
+# Ignorer les fichiers de configuration spécifiques à macOS
+.Trashes
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+
+# Ignorer les fichiers de configuration des applications
+Library/Preferences/
+Library/Application Support/
+
+# Ignorer les fichiers de cache des navigateurs
+Library/Caches/
+
+# Ignorer les fichiers de logs
+Library/Logs/
+
+# Ignorer les fichiers de configuration de l'IDE (par exemple, VSCode)
+.vscode/
+
+# Ignorer les fichiers de configuration de Node.js
+node_modules/
+
+# Ignorer les fichiers de configuration de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignorer les fichiers de configuration de Go
+*.test
+*.out
+
+# Ignorer les fichiers de configuration de Docker
+.dockerignore
+
+# Ignorer les fichiers de configuration de Kubernetes
+.kube/
+
+# Ignorer les fichiers de configuration de Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Ignorer les fichiers de configuration de Docker Compose
+docker-compose.override.yml
+
+# Ignorer les fichiers de configuration de Homebrew
+.brew/
