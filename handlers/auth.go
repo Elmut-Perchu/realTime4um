@@ -3,9 +3,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"realtimeforum/database"
 	"realtimeforum/middleware"
+	"strings"
 	"time"
 )
 
@@ -26,26 +28,43 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validation basique
-	if userDTO.Username == "" || userDTO.Email == "" || userDTO.Password == "" || 
-	   userDTO.FirstName == "" || userDTO.LastName == "" || userDTO.Age < 13 || 
-	   (userDTO.Gender != "M" && userDTO.Gender != "F" && userDTO.Gender != "Autre") {
+	if userDTO.Username == "" || userDTO.Email == "" || userDTO.Password == "" ||
+		userDTO.FirstName == "" || userDTO.LastName == "" || userDTO.Age < 13 ||
+		(userDTO.Gender != "M" && userDTO.Gender != "F" && userDTO.Gender != "Autre") {
 		http.Error(w, "Données incomplètes ou invalides", http.StatusBadRequest)
 		return
 	}
 
 	// Créer l'utilisateur
+	log.Printf("Tentative de création d'utilisateur: %s, %s", userDTO.Username, userDTO.Email)
 	userID, err := database.CreateUser(userDTO)
 	if err != nil {
-		http.Error(w, "Erreur lors de la création de l'utilisateur: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Erreur lors de la création de l'utilisateur: %v", err)
+		// Vérifier si l'erreur est liée à une contrainte d'unicité
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if strings.Contains(err.Error(), "users.email") {
+				http.Error(w, "Erreur lors de la création de l'utilisateur: Email déjà utilisé", http.StatusConflict)
+			} else if strings.Contains(err.Error(), "users.username") {
+				http.Error(w, "Erreur lors de la création de l'utilisateur: Nom d'utilisateur déjà utilisé", http.StatusConflict)
+			} else {
+				http.Error(w, "Erreur lors de la création de l'utilisateur: "+err.Error(), http.StatusConflict)
+			}
+		} else {
+			http.Error(w, "Erreur lors de la création de l'utilisateur: "+err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
+	log.Printf("Utilisateur créé avec l'ID: %d", userID)
 
 	// Créer une session pour l'utilisateur
+	log.Printf("Tentative de création de session pour l'utilisateur: %d", userID)
 	session, err := database.CreateSession(userID)
 	if err != nil {
+		log.Printf("Erreur lors de la création de la session: %v", err)
 		http.Error(w, "Erreur lors de la création de la session", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("Session créée avec succès: %s", session.ID)
 
 	// Définir le cookie de session
 	http.SetCookie(w, &http.Cookie{
@@ -58,11 +77,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Récupérer l'utilisateur créé
+	log.Printf("Récupération de l'utilisateur avec l'ID: %d", userID)
 	user, err := database.GetUserByID(userID)
 	if err != nil {
+		log.Printf("Erreur lors de la récupération de l'utilisateur: %v", err)
 		http.Error(w, "Erreur lors de la récupération de l'utilisateur", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("Utilisateur récupéré avec succès: %s", user.Username)
 
 	// Nettoyer le mot de passe avant de retourner l'utilisateur
 	user.Password = ""

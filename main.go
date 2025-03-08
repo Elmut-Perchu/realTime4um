@@ -1,4 +1,3 @@
-// fichier: main.go
 package main
 
 import (
@@ -14,10 +13,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Erreur lors de l'initialisation de la base de données: %v", err)
 	}
-	
+
 	// Configurer les routes
 	router := routes.SetupRoutes()
-	
+
 	// Démarrer le serveur
 	log.Println("Serveur démarré sur http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", router))

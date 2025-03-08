@@ -3,7 +3,6 @@ package database
 
 import (
 	"database/sql"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -35,19 +34,19 @@ func Initialize() error {
 	// Si c'est une nouvelle base de données, appliquer le schéma
 	if newDB {
 		log.Println("Création d'une nouvelle base de données...")
-		
+
 		// Lire le fichier schema.sql
-		schemaBytes, err := ioutil.ReadFile("schema.sql")
+		schemaBytes, err := os.ReadFile("schema.sql")
 		if err != nil {
 			return err
 		}
-		
+
 		// Exécuter les requêtes SQL
 		_, err = DB.Exec(string(schemaBytes))
 		if err != nil {
 			return err
 		}
-		
+
 		log.Println("Schéma de base de données initialisé avec succès")
 	}
 

@@ -172,7 +172,6 @@ func GetOnlineUsers() ([]*User, error) {
 // ==================================
 
 // CreateSession crée une nouvelle session pour un utilisateur
-// CreateSession crée une nouvelle session pour un utilisateur
 func CreateSession(userID int) (*Session, error) {
 	// Générer un ID de session unique
 	sessionID := uuid.NewString()
