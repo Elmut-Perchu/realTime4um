@@ -13,6 +13,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Erreur lors de l'initialisation de la base de données: %v", err)
 	}
+	defer database.Close()
 
 	// Configurer les routes
 	router := routes.SetupRoutes()

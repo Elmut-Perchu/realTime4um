@@ -1,10 +1,10 @@
-// fichier: database/database.go
 package database
 
 import (
 	"database/sql"
 	"log"
 	"os"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -35,8 +35,19 @@ func Initialize() error {
 	if newDB {
 		log.Println("Création d'une nouvelle base de données...")
 
+		// Déterminer le chemin du fichier schema.sql
+		// Chercher d'abord dans le répertoire courant
+		schemaPath := "schema.sql"
+		if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
+			// Essayer dans le répertoire parent
+			schemaPath = filepath.Join("..", "schema.sql")
+			if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
+				return err
+			}
+		}
+
 		// Lire le fichier schema.sql
-		schemaBytes, err := os.ReadFile("schema.sql")
+		schemaBytes, err := os.ReadFile(schemaPath)
 		if err != nil {
 			return err
 		}

@@ -44,16 +44,28 @@ func CreateUser(user UserDTO) (int, error) {
 // GetUserByID récupère un utilisateur par son ID
 func GetUserByID(id int) (*User, error) {
 	user := &User{}
+
+	// Utiliser des variables temporaires pour les champs qui peuvent être NULL
+	var lastLoginNull sql.NullTime
+
 	err := DB.QueryRow(
 		"SELECT id, username, age, gender, first_name, last_name, email, password, created_at, last_login, online FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.LastLogin, &user.Online)
+	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email,
+		&user.Password, &user.CreatedAt, &lastLoginNull, &user.Online)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("utilisateur non trouvé")
 		}
 		return nil, err
+	}
+
+	// Si lastLogin est valide, l'assigner, sinon utiliser l'heure actuelle
+	if lastLoginNull.Valid {
+		user.LastLogin = lastLoginNull.Time
+	} else {
+		user.LastLogin = time.Now()
 	}
 
 	return user, nil
@@ -62,10 +74,15 @@ func GetUserByID(id int) (*User, error) {
 // GetUserByEmail récupère un utilisateur par son email
 func GetUserByEmail(email string) (*User, error) {
 	user := &User{}
+
+	// Utiliser des variables temporaires pour les champs qui peuvent être NULL
+	var lastLoginNull sql.NullTime
+
 	err := DB.QueryRow(
 		"SELECT id, username, age, gender, first_name, last_name, email, password, created_at, last_login, online FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.LastLogin, &user.Online)
+	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email,
+		&user.Password, &user.CreatedAt, &lastLoginNull, &user.Online)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -74,22 +91,41 @@ func GetUserByEmail(email string) (*User, error) {
 		return nil, err
 	}
 
+	// Si lastLogin est valide, l'assigner, sinon utiliser l'heure actuelle
+	if lastLoginNull.Valid {
+		user.LastLogin = lastLoginNull.Time
+	} else {
+		user.LastLogin = time.Now()
+	}
+
 	return user, nil
 }
 
 // GetUserByUsername récupère un utilisateur par son nom d'utilisateur
 func GetUserByUsername(username string) (*User, error) {
 	user := &User{}
+
+	// Utiliser des variables temporaires pour les champs qui peuvent être NULL
+	var lastLoginNull sql.NullTime
+
 	err := DB.QueryRow(
 		"SELECT id, username, age, gender, first_name, last_name, email, password, created_at, last_login, online FROM users WHERE username = ?",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.LastLogin, &user.Online)
+	).Scan(&user.ID, &user.Username, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email,
+		&user.Password, &user.CreatedAt, &lastLoginNull, &user.Online)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("utilisateur non trouvé")
 		}
 		return nil, err
+	}
+
+	// Si lastLogin est valide, l'assigner, sinon utiliser l'heure actuelle
+	if lastLoginNull.Valid {
+		user.LastLogin = lastLoginNull.Time
+	} else {
+		user.LastLogin = time.Now()
 	}
 
 	return user, nil

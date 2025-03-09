@@ -1,10 +1,10 @@
-// fichier: routes/routes.go
 package routes
 
 import (
 	"net/http"
 	"realtimeforum/handlers"
 	"realtimeforum/middleware"
+	"strings"
 )
 
 // apiHandler est un gestionnaire personnalisé qui utilise un switch pour router les requêtes
@@ -77,10 +77,6 @@ func (h apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		authHandler := middleware.AuthMiddleware(http.HandlerFunc(handlers.GetTypingStatusHandler))
 		authHandler.ServeHTTP(w, r)
 
-	// Route WebSocket
-	case r.URL.Path == "/ws":
-		handlers.WebSocketHandler(w, r)
-
 	// Route par défaut
 	default:
 		http.NotFound(w, r)
@@ -98,9 +94,26 @@ func SetupRoutes() http.Handler {
 	// Ajouter le gestionnaire WebSocket
 	mux.HandleFunc("/ws", handlers.WebSocketHandler)
 
-	// Servir les fichiers statiques
+	// Servir les fichiers statiques avec gestion du SPA (Single Page Application)
 	fileServer := http.FileServer(http.Dir("static"))
-	mux.Handle("/", fileServer)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Si c'est un fichier JavaScript ou CSS, le servir directement
+		if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// Vérifier si le fichier existe
+		if _, err := http.Dir("static").Open(path); err != nil && path != "/" {
+			// Si le fichier n'existe pas et que ce n'est pas la racine,
+			// servir index.html pour permettre au frontend de gérer les routes
+			r.URL.Path = "/"
+		}
+
+		fileServer.ServeHTTP(w, r)
+	})
 
 	return mux
 }

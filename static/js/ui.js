@@ -1,5 +1,3 @@
-// fichier: static/js/ui.js
-
 // Initialiser l'interface utilisateur
 export function initUI(state, navigateTo) {
     // Configurer la navigation
@@ -44,21 +42,9 @@ function setupModals() {
     const loginButton = document.getElementById('login-button');
     const loginModal = document.getElementById('login-modal');
 
-    if (!loginButton) {
-        console.error("Bouton de connexion non trouvé (id: login-button)");
-    } else {
-        console.log("Bouton de connexion trouvé");
-    }
-
-    if (!loginModal) {
-        console.error("Modal de connexion non trouvé (id: login-modal)");
-    } else {
-        console.log("Modal de connexion trouvé");
+    if (loginButton && loginModal) {
+        console.log("Bouton et modal de connexion trouvés");
         const loginClose = loginModal.querySelector('.close');
-
-        if (!loginClose) {
-            console.error("Bouton de fermeture du modal de connexion non trouvé");
-        }
 
         loginButton.addEventListener('click', () => {
             console.log("Clic sur le bouton de connexion");
@@ -70,27 +56,17 @@ function setupModals() {
                 loginModal.style.display = 'none';
             });
         }
+    } else {
+        console.error("Bouton ou modal de connexion non trouvé");
     }
 
     // Register Modal
     const registerButton = document.getElementById('register-button');
     const registerModal = document.getElementById('register-modal');
 
-    if (!registerButton) {
-        console.error("Bouton d'inscription non trouvé (id: register-button)");
-    } else {
-        console.log("Bouton d'inscription trouvé");
-    }
-
-    if (!registerModal) {
-        console.error("Modal d'inscription non trouvé (id: register-modal)");
-    } else {
-        console.log("Modal d'inscription trouvé");
+    if (registerButton && registerModal) {
+        console.log("Bouton et modal d'inscription trouvés");
         const registerClose = registerModal.querySelector('.close');
-
-        if (!registerClose) {
-            console.error("Bouton de fermeture du modal d'inscription non trouvé");
-        }
 
         registerButton.addEventListener('click', () => {
             console.log("Clic sur le bouton d'inscription");
@@ -102,15 +78,40 @@ function setupModals() {
                 registerModal.style.display = 'none';
             });
         }
+    } else {
+        console.error("Bouton ou modal d'inscription non trouvé");
+    }
+
+    // New Post Modal
+    const newPostButton = document.getElementById('new-post-button');
+    const newPostModal = document.getElementById('new-post-modal');
+
+    if (newPostButton && newPostModal) {
+        console.log("Bouton et modal de nouvelle publication trouvés");
+        const newPostClose = newPostModal.querySelector('.close');
+
+        newPostButton.addEventListener('click', () => {
+            console.log("Clic sur le bouton de nouvelle publication");
+            newPostModal.style.display = 'block';
+        });
+
+        if (newPostClose) {
+            newPostClose.addEventListener('click', () => {
+                newPostModal.style.display = 'none';
+            });
+        }
     }
 
     // Fermer les modals en cliquant en dehors
     window.addEventListener('click', (event) => {
-        if (event.target === loginModal) {
+        if (loginModal && event.target === loginModal) {
             loginModal.style.display = 'none';
         }
-        if (event.target === registerModal) {
+        if (registerModal && event.target === registerModal) {
             registerModal.style.display = 'none';
+        }
+        if (newPostModal && event.target === newPostModal) {
+            newPostModal.style.display = 'none';
         }
     });
 
@@ -132,6 +133,11 @@ function updateAuthUI(state) {
     const registerButton = document.getElementById('register-button');
     const userInfo = document.getElementById('user-info');
     const username = document.getElementById('username');
+
+    if (!loginButton || !registerButton || !userInfo || !username) {
+        console.error("Certains éléments d'authentification n'ont pas été trouvés");
+        return;
+    }
 
     if (state.isAuthenticated && state.currentUser) {
         // Masquer les boutons de connexion et d'inscription

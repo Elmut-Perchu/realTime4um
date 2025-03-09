@@ -1,4 +1,3 @@
-// fichier: static/js/app.js
 import { initAuth, isAuthenticated, getCurrentUser } from './auth.js';
 import { initPosts } from './posts.js';
 import { initMessages } from './messages.js';
@@ -39,11 +38,18 @@ async function initApp() {
         console.log("Initialisation des messages...");
         initMessages(state);
 
+        // Charger les publications et les catégories
+        await fetchPosts();
+        await fetchCategories();
+
         // Initialiser les WebSockets si l'utilisateur est authentifié
         if (state.isAuthenticated) {
             console.log("Initialisation des WebSockets...");
             const socket = initWebSocket(state, handleWebSocketMessage);
             state.socket = socket;
+
+            // Charger les utilisateurs en ligne
+            await fetchOnlineUsers();
         }
 
         // Gérer la navigation initiale
@@ -53,6 +59,7 @@ async function initApp() {
         console.log("Initialisation terminée avec succès!");
     } catch (error) {
         console.error("Erreur lors de l'initialisation de l'application:", error);
+        alert("Une erreur est survenue lors de l'initialisation de l'application. Veuillez rafraîchir la page.");
     }
 }
 
@@ -78,6 +85,9 @@ function handleAuthenticationChange() {
             const socket = initWebSocket(state, handleWebSocketMessage);
             state.socket = socket;
         }
+
+        // Charger les utilisateurs en ligne
+        fetchOnlineUsers();
     } else {
         // L'utilisateur vient de se déconnecter
         if (state.socket) {
@@ -89,32 +99,39 @@ function handleAuthenticationChange() {
 
 // Gestion des messages WebSocket
 function handleWebSocketMessage(event) {
-    const message = JSON.parse(event.data);
+    try {
+        const message = JSON.parse(event.data);
 
-    switch (message.type) {
-        case 'online_users':
-            updateAppState({ onlineUsers: message.payload });
-            break;
-        case 'private_message':
-            handlePrivateMessage(message.payload);
-            break;
-        case 'typing_indicator':
-            handleTypingIndicator(message.payload);
-            break;
-        case 'post_created':
-            handleNewPost(message.payload);
-            break;
-        case 'comment_created':
-            handleNewComment(message.payload);
-            break;
-        default:
-            console.log('Type de message non géré:', message.type);
+        switch (message.type) {
+            case 'online_users':
+                updateAppState({ onlineUsers: message.payload });
+                updateOnlineUsersList();
+                break;
+            case 'private_message':
+                handlePrivateMessage(message.payload);
+                break;
+            case 'typing_indicator':
+                handleTypingIndicator(message.payload);
+                break;
+            case 'post_created':
+                handleNewPost(message.payload);
+                break;
+            case 'comment_created':
+                handleNewComment(message.payload);
+                break;
+            default:
+                console.log('Type de message non géré:', message.type);
+        }
+    } catch (error) {
+        console.error('Erreur lors du traitement du message WebSocket:', error);
     }
 }
 
 // Gestion des messages privés reçus
 function handlePrivateMessage(message) {
     const messagesList = document.getElementById('messages-list');
+    if (!messagesList) return;
+
     const isCurrentChat = state.currentChatUser &&
         (message.senderId === state.currentChatUser.id ||
             message.receiverId === state.currentChatUser.id);
@@ -151,6 +168,8 @@ function handleTypingIndicator(typingData) {
     const typingIndicator = document.getElementById('typing-indicator');
     const typingUsername = document.getElementById('typing-username');
 
+    if (!typingIndicator || !typingUsername) return;
+
     // Vérifier si c'est pour la conversation courante
     if (state.currentChatUser && typingData.userId === state.currentChatUser.id) {
         if (typingData.isTyping) {
@@ -181,6 +200,7 @@ function handleNewComment(comment) {
     if (state.currentPost && comment.postId === state.currentPost.id) {
         // Ajouter le commentaire à la liste
         const commentsList = document.getElementById('comments-list');
+        if (!commentsList) return;
 
         const commentDiv = document.createElement('div');
         commentDiv.className = 'comment';
@@ -304,6 +324,7 @@ function handleInitialNavigation() {
                     navigateTo('messages', { user });
                 }
             });
+            return; // On retourne pour éviter la navigation immédiate
         }
     } else if (path.startsWith('/posts')) {
         page = 'post-detail';
@@ -314,19 +335,27 @@ function handleInitialNavigation() {
                     navigateTo('post-detail', post);
                 }
             });
+            return; // On retourne pour éviter la navigation immédiate
         }
     }
 
     // Naviguer vers la page appropriée
-    if (page !== 'post-detail' && page !== 'messages') {
-        navigateTo(page, data);
-    }
+    navigateTo(page, data);
 }
 
 // Récupération des publications
 async function fetchPosts() {
     try {
+        const postsContainer = document.getElementById('posts-container');
+        if (postsContainer) {
+            postsContainer.innerHTML = '<div class="loading">Chargement des publications...</div>';
+        }
+
         const response = await fetch('/api/posts');
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
         const posts = await response.json();
 
         updateAppState({ posts });
@@ -336,14 +365,25 @@ async function fetchPosts() {
 
         // Afficher un message d'erreur à l'utilisateur
         const postsContainer = document.getElementById('posts-container');
-        postsContainer.innerHTML = '<div class="error">Erreur lors du chargement des publications. Veuillez réessayer.</div>';
+        if (postsContainer) {
+            postsContainer.innerHTML = '<div class="error">Erreur lors du chargement des publications. Veuillez réessayer.</div>';
+        }
     }
 }
 
 // Récupération des catégories
 async function fetchCategories() {
     try {
+        const categoriesContainer = document.getElementById('categories-container');
+        if (categoriesContainer) {
+            categoriesContainer.innerHTML = '<div class="loading">Chargement des catégories...</div>';
+        }
+
         const response = await fetch('/api/categories');
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
         const categories = await response.json();
 
         updateAppState({ categories });
@@ -353,14 +393,25 @@ async function fetchCategories() {
 
         // Afficher un message d'erreur à l'utilisateur
         const categoriesContainer = document.getElementById('categories-container');
-        categoriesContainer.innerHTML = '<div class="error">Erreur lors du chargement des catégories. Veuillez réessayer.</div>';
+        if (categoriesContainer) {
+            categoriesContainer.innerHTML = '<div class="error">Erreur lors du chargement des catégories. Veuillez réessayer.</div>';
+        }
     }
 }
 
 // Récupération des commentaires d'une publication
 async function fetchComments(postId) {
     try {
+        const commentsList = document.getElementById('comments-list');
+        if (commentsList) {
+            commentsList.innerHTML = '<div class="loading">Chargement des commentaires...</div>';
+        }
+
         const response = await fetch(`/api/posts/${postId}/comments`);
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
         const comments = await response.json();
 
         updateCommentsList(comments);
@@ -369,14 +420,25 @@ async function fetchComments(postId) {
 
         // Afficher un message d'erreur à l'utilisateur
         const commentsList = document.getElementById('comments-list');
-        commentsList.innerHTML = '<div class="error">Erreur lors du chargement des commentaires. Veuillez réessayer.</div>';
+        if (commentsList) {
+            commentsList.innerHTML = '<div class="error">Erreur lors du chargement des commentaires. Veuillez réessayer.</div>';
+        }
     }
 }
 
 // Récupération des messages avec un utilisateur
 async function fetchMessages(userId) {
     try {
+        const messagesList = document.getElementById('messages-list');
+        if (messagesList) {
+            messagesList.innerHTML = '<div class="loading">Chargement des messages...</div>';
+        }
+
         const response = await fetch(`/api/messages/${userId}`);
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
         const messages = await response.json();
 
         updateMessagesList(messages);
@@ -385,14 +447,27 @@ async function fetchMessages(userId) {
 
         // Afficher un message d'erreur à l'utilisateur
         const messagesList = document.getElementById('messages-list');
-        messagesList.innerHTML = '<div class="error">Erreur lors du chargement des messages. Veuillez réessayer.</div>';
+        if (messagesList) {
+            messagesList.innerHTML = '<div class="error">Erreur lors du chargement des messages. Veuillez réessayer.</div>';
+        }
     }
 }
 
 // Récupération des utilisateurs en ligne
 async function fetchOnlineUsers() {
+    if (!state.isAuthenticated) return;
+
     try {
+        const onlineUsers = document.getElementById('online-users');
+        if (onlineUsers) {
+            onlineUsers.innerHTML = '<li class="loading">Chargement des utilisateurs...</li>';
+        }
+
         const response = await fetch('/api/users/online');
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
         const users = await response.json();
 
         updateAppState({ onlineUsers: users });
@@ -402,7 +477,9 @@ async function fetchOnlineUsers() {
 
         // Afficher un message d'erreur à l'utilisateur
         const onlineUsers = document.getElementById('online-users');
-        onlineUsers.innerHTML = '<li class="error">Erreur lors du chargement des utilisateurs. Veuillez réessayer.</li>';
+        if (onlineUsers) {
+            onlineUsers.innerHTML = '<li class="error">Erreur lors du chargement des utilisateurs. Veuillez réessayer.</li>';
+        }
     }
 }
 
@@ -447,8 +524,9 @@ async function fetchUserById(userId) {
 // Mise à jour de la liste des publications
 function updatePostsList() {
     const postsContainer = document.getElementById('posts-container');
+    if (!postsContainer) return;
 
-    if (state.posts.length === 0) {
+    if (!state.posts || state.posts.length === 0) {
         postsContainer.innerHTML = '<div class="empty">Aucune publication disponible.</div>';
         return;
     }
@@ -506,8 +584,9 @@ function updatePostsList() {
 // Mise à jour de la liste des catégories
 function updateCategoriesList() {
     const categoriesContainer = document.getElementById('categories-container');
+    if (!categoriesContainer) return;
 
-    if (state.categories.length === 0) {
+    if (!state.categories || state.categories.length === 0) {
         categoriesContainer.innerHTML = '<div class="empty">Aucune catégorie disponible.</div>';
         return;
     }
@@ -538,19 +617,22 @@ function updateCategoriesList() {
 
     // Mettre également à jour le select dans le formulaire de nouvelle publication
     const postCategorySelect = document.getElementById('post-category');
-    postCategorySelect.innerHTML = '';
+    if (postCategorySelect) {
+        postCategorySelect.innerHTML = '';
 
-    state.categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category.id;
-        option.textContent = category.name;
-        postCategorySelect.appendChild(option);
-    });
+        state.categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.id;
+            option.textContent = category.name;
+            postCategorySelect.appendChild(option);
+        });
+    }
 }
 
 // Mise à jour de la liste des commentaires
 function updateCommentsList(comments) {
     const commentsList = document.getElementById('comments-list');
+    if (!commentsList) return;
 
     if (!comments || comments.length === 0) {
         commentsList.innerHTML = '<div class="empty">Aucun commentaire pour cette publication.</div>';
@@ -590,6 +672,7 @@ function updateCommentsList(comments) {
 // Mise à jour de la liste des messages
 function updateMessagesList(messages) {
     const messagesList = document.getElementById('messages-list');
+    if (!messagesList) return;
 
     if (!messages || messages.length === 0) {
         messagesList.innerHTML = '<div class="empty">Aucun message dans cette conversation.</div>';
@@ -627,9 +710,15 @@ function updateOnlineUsersList() {
     const onlineUsers = document.getElementById('online-users');
     const usersList = document.getElementById('users-list');
 
+    if (!onlineUsers && !usersList) return;
+
     if (!state.onlineUsers || state.onlineUsers.length === 0) {
-        onlineUsers.innerHTML = '<li class="empty">Aucun utilisateur en ligne.</li>';
-        usersList.innerHTML = '<div class="empty">Aucun utilisateur disponible.</div>';
+        if (onlineUsers) {
+            onlineUsers.innerHTML = '<li class="empty">Aucun utilisateur en ligne.</li>';
+        }
+        if (usersList) {
+            usersList.innerHTML = '<div class="empty">Aucun utilisateur disponible.</div>';
+        }
         return;
     }
 
@@ -638,57 +727,61 @@ function updateOnlineUsersList() {
     // La liste arrive déjà triée de l'API
 
     // Mettre à jour la liste des utilisateurs en ligne dans la sidebar
-    onlineUsers.innerHTML = '';
+    if (onlineUsers) {
+        onlineUsers.innerHTML = '';
 
-    state.onlineUsers.forEach(user => {
-        // Ne pas afficher l'utilisateur courant
-        if (state.currentUser && user.id === state.currentUser.id) {
-            return;
-        }
+        state.onlineUsers.forEach(user => {
+            // Ne pas afficher l'utilisateur courant
+            if (state.currentUser && user.id === state.currentUser.id) {
+                return;
+            }
 
-        const li = document.createElement('li');
-        li.onclick = () => navigateTo('messages', { user });
+            const li = document.createElement('li');
+            li.onclick = () => navigateTo('messages', { user });
 
-        const status = document.createElement('span');
-        status.className = `online-status ${user.online ? 'online' : 'offline'}`;
+            const status = document.createElement('span');
+            status.className = `online-status ${user.online ? 'online' : 'offline'}`;
 
-        const username = document.createElement('span');
-        username.textContent = user.username;
+            const username = document.createElement('span');
+            username.textContent = user.username;
 
-        li.appendChild(status);
-        li.appendChild(username);
+            li.appendChild(status);
+            li.appendChild(username);
 
-        onlineUsers.appendChild(li);
-    });
+            onlineUsers.appendChild(li);
+        });
+    }
 
     // Mettre à jour la liste des utilisateurs dans la page de messages
-    usersList.innerHTML = '';
+    if (usersList) {
+        usersList.innerHTML = '';
 
-    state.onlineUsers.forEach(user => {
-        // Ne pas afficher l'utilisateur courant
-        if (state.currentUser && user.id === state.currentUser.id) {
-            return;
-        }
+        state.onlineUsers.forEach(user => {
+            // Ne pas afficher l'utilisateur courant
+            if (state.currentUser && user.id === state.currentUser.id) {
+                return;
+            }
 
-        const li = document.createElement('li');
-        li.onclick = () => navigateTo('messages', { user });
+            const li = document.createElement('li');
+            li.onclick = () => navigateTo('messages', { user });
 
-        // Marquer l'utilisateur actuel comme actif
-        if (state.currentChatUser && user.id === state.currentChatUser.id) {
-            li.className = 'active';
-        }
+            // Marquer l'utilisateur actuel comme actif
+            if (state.currentChatUser && user.id === state.currentChatUser.id) {
+                li.className = 'active';
+            }
 
-        const status = document.createElement('span');
-        status.className = `online-status ${user.online ? 'online' : 'offline'}`;
+            const status = document.createElement('span');
+            status.className = `online-status ${user.online ? 'online' : 'offline'}`;
 
-        const username = document.createElement('span');
-        username.textContent = user.username;
+            const username = document.createElement('span');
+            username.textContent = user.username;
 
-        li.appendChild(status);
-        li.appendChild(username);
+            li.appendChild(status);
+            li.appendChild(username);
 
-        usersList.appendChild(li);
-    });
+            usersList.appendChild(li);
+        });
+    }
 }
 
 // Initialiser l'application
@@ -707,4 +800,4 @@ window.addEventListener('popstate', (event) => {
 });
 
 // Exporter les fonctions et l'état pour les autres modules
-export { state, updateAppState, navigateTo };
+export { state, updateAppState, navigateTo, fetchCategories, fetchPosts, updatePostsList, updateOnlineUsersList };
