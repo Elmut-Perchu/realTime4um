@@ -19,10 +19,17 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Activer CORS pour cette réponse
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 	// Décoder le corps de la requête
 	var userDTO database.UserDTO
 	err := json.NewDecoder(r.Body).Decode(&userDTO)
 	if err != nil {
+		log.Printf("Erreur de décodage du corps de la requête: %v", err)
 		http.Error(w, "Données invalides", http.StatusBadRequest)
 		return
 	}
@@ -71,10 +78,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     "session_id",
 		Value:    session.ID,
 		Expires:  session.ExpiresAt,
-		HttpOnly: true,
+		HttpOnly: false, // Permettre l'accès via JavaScript
 		Path:     "/",
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
+		Secure:   false, // Ne pas exiger HTTPS en développement
 	})
+
+	// Ajouter l'ID de session dans l'en-tête pour le client JavaScript
+	w.Header().Set("X-Session-ID", session.ID)
 
 	// Récupérer l'utilisateur créé
 	log.Printf("Récupération de l'utilisateur avec l'ID: %d", userID)
@@ -89,10 +100,33 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// Nettoyer le mot de passe avant de retourner l'utilisateur
 	user.Password = ""
 
-	// Retourner l'utilisateur créé
+	// Créer une réponse personnalisée avec l'utilisateur et l'ID de session
+	response := struct {
+		*database.User
+		SessionID string `json:"sessionId"`
+	}{
+		User:      user,
+		SessionID: session.ID,
+	}
+
+	// Définir le type de contenu avant d'écrire quoi que ce soit
 	w.Header().Set("Content-Type", "application/json")
+	// Écrire le code de statut explicitement
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+
+	// Sérialiser manuellement pour éviter les problèmes
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Erreur lors de la sérialisation de la réponse: %v", err)
+		http.Error(w, "Erreur lors de la sérialisation de la réponse", http.StatusInternalServerError)
+		return
+	}
+
+	// Écrire directement dans le ResponseWriter
+	_, err = w.Write(responseBytes)
+	if err != nil {
+		log.Printf("Erreur lors de l'écriture de la réponse: %v", err)
+	}
 }
 
 // LoginHandler gère la connexion d'un utilisateur
@@ -103,43 +137,57 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Activer CORS pour cette réponse
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 	// Décoder le corps de la requête
 	var loginReq database.LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&loginReq)
 	if err != nil {
+		log.Printf("Erreur de décodage du corps de la requête: %v", err)
 		http.Error(w, "Données invalides", http.StatusBadRequest)
 		return
 	}
 
 	// Authentifier l'utilisateur
+	log.Printf("Tentative d'authentification pour: %s", loginReq.Identifier)
 	user, err := database.AuthenticateUser(loginReq.Identifier, loginReq.Password)
 	if err != nil {
+		log.Printf("Échec d'authentification pour %s: %v", loginReq.Identifier, err)
 		http.Error(w, "Identifiants invalides", http.StatusUnauthorized)
 		return
 	}
+	log.Printf("Authentification réussie pour: %s", user.Username)
 
 	// Créer une session pour l'utilisateur
+	log.Printf("Création d'une session pour l'utilisateur: %d", user.ID)
 	session, err := database.CreateSession(user.ID)
 	if err != nil {
+		log.Printf("Erreur lors de la création de la session: %v", err)
 		http.Error(w, "Erreur lors de la création de la session", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("Session créée avec succès: %s", session.ID)
 
 	// Définir le cookie de session
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
 		Value:    session.ID,
 		Expires:  session.ExpiresAt,
-		HttpOnly: true,
+		HttpOnly: false, // Permettre l'accès via JavaScript pour diagnostic
 		Path:     "/",
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode, // Permettre l'accès depuis n'importe quelle origine
+		Secure:   false,                 // Ne pas exiger HTTPS en développement
 	})
 
 	// Mettre à jour le statut en ligne
 	err = database.UpdateUserOnlineStatus(user.ID, true)
 	if err != nil {
 		// Log l'erreur mais continuer
-		println("Erreur lors de la mise à jour du statut en ligne:", err.Error())
+		log.Printf("Erreur lors de la mise à jour du statut en ligne: %v", err)
 	}
 
 	// Nettoyer le mot de passe avant de retourner l'utilisateur
@@ -154,8 +202,22 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		SessionID: session.ID,
 	}
 
+	// Définir le type de contenu avant d'écrire quoi que ce soit
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+
+	// Sérialiser manuellement pour éviter les problèmes
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Erreur lors de la sérialisation de la réponse: %v", err)
+		http.Error(w, "Erreur lors de la sérialisation de la réponse", http.StatusInternalServerError)
+		return
+	}
+
+	// Écrire directement dans le ResponseWriter
+	_, err = w.Write(responseBytes)
+	if err != nil {
+		log.Printf("Erreur lors de l'écriture de la réponse: %v", err)
+	}
 }
 
 // LogoutHandler gère la déconnexion d'un utilisateur
@@ -214,26 +276,76 @@ func GetCurrentUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Récupérer l'ID utilisateur depuis le contexte
-	userID, ok := middleware.GetUserID(r)
-	if !ok {
-		http.Error(w, "Non authentifié", http.StatusUnauthorized)
-		return
+	// Activer CORS pour cette réponse
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+	var userID int
+
+	// Vérifier d'abord le cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		// Vérifier l'en-tête Authorization
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			session, err := database.GetSessionByID(token)
+			if err == nil {
+				// Utiliser l'ID utilisateur de la session
+				userID = session.UserID
+				log.Printf("Authentification par token Bearer réussie pour l'utilisateur ID=%d", userID)
+			} else {
+				log.Printf("Token Bearer invalide: %v", err)
+				http.Error(w, "Non authentifié", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			log.Printf("Aucun cookie ou token Bearer trouvé")
+			http.Error(w, "Non authentifié", http.StatusUnauthorized)
+			return
+		}
+	} else {
+		// Utiliser le cookie comme avant
+		session, err := database.GetSessionByID(cookie.Value)
+		if err != nil {
+			log.Printf("Cookie de session invalide: %v", err)
+			http.Error(w, "Session invalide", http.StatusUnauthorized)
+			return
+		}
+		userID = session.UserID
+		log.Printf("Authentification par cookie réussie pour l'utilisateur ID=%d", userID)
 	}
 
 	// Récupérer l'utilisateur
 	user, err := database.GetUserByID(userID)
 	if err != nil {
+		log.Printf("Erreur lors de la récupération de l'utilisateur: %v", err)
 		http.Error(w, "Erreur lors de la récupération de l'utilisateur", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("Utilisateur récupéré avec succès: %s", user.Username)
 
 	// Nettoyer le mot de passe avant de retourner l'utilisateur
 	user.Password = ""
 
-	// Retourner l'utilisateur
+	// Définir le type de contenu
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+
+	// Sérialiser manuellement pour éviter les problèmes
+	responseBytes, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("Erreur lors de la sérialisation de la réponse: %v", err)
+		http.Error(w, "Erreur lors de la sérialisation de la réponse", http.StatusInternalServerError)
+		return
+	}
+
+	// Écrire directement dans le ResponseWriter
+	_, err = w.Write(responseBytes)
+	if err != nil {
+		log.Printf("Erreur lors de l'écriture de la réponse: %v", err)
+	}
 }
 
 // GetOnlineUsersHandler récupère la liste des utilisateurs en ligne

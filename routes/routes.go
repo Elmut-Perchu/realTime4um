@@ -88,15 +88,50 @@ func SetupRoutes() http.Handler {
 	// Créer un nouveau multiplexeur
 	mux := http.NewServeMux()
 
-	// Ajouter le gestionnaire d'API
-	mux.Handle("/api/", apiHandler{})
+	// Ajouter un gestionnaire CORS global
+	corsHandler := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Configurer les en-têtes CORS
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 
-	// Ajouter le gestionnaire WebSocket
-	mux.HandleFunc("/ws", handlers.WebSocketHandler)
+			// Répondre immédiatement aux requêtes OPTIONS
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 
-	// Servir les fichiers statiques avec gestion du SPA (Single Page Application)
+			// Appeler le gestionnaire suivant
+			h.ServeHTTP(w, r)
+		})
+	}
+
+	// Appliquer le middleware CORS à toutes les routes
+	handler := corsHandler(apiHandler{})
+	mux.Handle("/api/", handler)
+
+	// Ajouter le gestionnaire WebSocket avec CORS
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		// Appliquer CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		// Traiter la requête WebSocket
+		handlers.WebSocketHandler(w, r)
+	})
+
+	// Servir les fichiers statiques avec gestion du SPA
 	fileServer := http.FileServer(http.Dir("static"))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Appliquer CORS pour les fichiers statiques aussi
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
 		path := r.URL.Path
 
 		// Si c'est un fichier JavaScript ou CSS, le servir directement

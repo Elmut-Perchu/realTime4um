@@ -1,13 +1,25 @@
 // Initialiser le module d'authentification
 export async function initAuth(state, updateAppState) {
     try {
+        console.log("Vérification de l'authentification...");
+
         // Vérifier si l'utilisateur est déjà connecté
-        const user = await checkAuth();
-        if (user) {
-            updateAppState({
-                currentUser: user,
-                isAuthenticated: true
-            });
+        if (isAuthenticated()) {
+            console.log("Token de session trouvé dans localStorage, tentative de récupération de l'utilisateur");
+            const user = await getCurrentUser();
+            if (user) {
+                console.log("Utilisateur authentifié:", user.username);
+                updateAppState({
+                    currentUser: user,
+                    isAuthenticated: true
+                });
+            } else {
+                console.log("Token de session présent mais utilisateur non trouvé");
+                // Supprimer le token obsolète
+                localStorage.removeItem('session_id');
+            }
+        } else {
+            console.log("Aucun token de session trouvé dans localStorage");
         }
 
         // Configurer les événements pour les formulaires d'authentification
@@ -19,30 +31,44 @@ export async function initAuth(state, updateAppState) {
 
 // Vérifier si l'utilisateur est authentifié
 export function isAuthenticated() {
-    return document.cookie.includes('session_id=');
+    return localStorage.getItem('session_id') !== null;
 }
 
 // Récupérer l'utilisateur actuel
 export async function getCurrentUser() {
     try {
-        const response = await fetch('/api/me');
-        if (!response.ok) {
+        console.log("Tentative de récupération de l'utilisateur actuel...");
+        const sessionId = localStorage.getItem('session_id');
+
+        if (!sessionId) {
+            console.log("Aucun token de session trouvé");
             return null;
         }
 
-        return await response.json();
+        const response = await fetch('/api/me', {
+            headers: {
+                'Authorization': `Bearer ${sessionId}`
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                console.log("L'utilisateur n'est pas authentifié");
+                // Nettoyer le localStorage si le token n'est plus valide
+                localStorage.removeItem('session_id');
+            } else {
+                console.error("Erreur lors de la récupération de l'utilisateur:", response.status);
+            }
+            return null;
+        }
+
+        const user = await response.json();
+        console.log("Utilisateur récupéré:", user.username);
+        return user;
     } catch (error) {
         console.error('Erreur lors de la récupération de l\'utilisateur:', error);
         return null;
     }
-}
-
-// Vérifier l'authentification
-async function checkAuth() {
-    if (isAuthenticated()) {
-        return await getCurrentUser();
-    }
-    return null;
 }
 
 // Analyser l'erreur de réponse
@@ -76,6 +102,11 @@ function setupAuthForms(updateAppState) {
             const password = document.getElementById('login-password').value;
 
             try {
+                console.log("Tentative de connexion pour:", identifier);
+
+                // Désactiver le formulaire pendant la requête
+                Array.from(loginForm.elements).forEach(el => el.disabled = true);
+
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
@@ -90,6 +121,10 @@ function setupAuthForms(updateAppState) {
                 }
 
                 const data = await response.json();
+                console.log("Connexion réussie pour:", data.user.username);
+
+                // Stocker le token dans localStorage
+                localStorage.setItem('session_id', data.sessionId);
 
                 // Mettre à jour l'état
                 updateAppState({
@@ -106,14 +141,15 @@ function setupAuthForms(updateAppState) {
                 // Réinitialiser le formulaire
                 loginForm.reset();
 
-                // Rediriger vers la page d'accueil si ce n'est pas déjà le cas
-                if (window.location.pathname !== '/') {
-                    window.location.href = '/';
-                }
+                // Recharger la page complètement pour s'assurer que tout est mis à jour
+                window.location.reload();
             } catch (error) {
                 console.error('Erreur de connexion:', error);
                 const errorMessage = error.message || "Erreur de connexion";
                 alert(errorMessage);
+
+                // Réactiver le formulaire
+                Array.from(loginForm.elements).forEach(el => el.disabled = false);
             }
         });
     }
@@ -135,6 +171,11 @@ function setupAuthForms(updateAppState) {
             };
 
             try {
+                console.log("Tentative d'inscription pour:", userData.username);
+
+                // Désactiver le formulaire pendant la requête
+                Array.from(registerForm.elements).forEach(el => el.disabled = true);
+
                 const response = await fetch('/api/register', {
                     method: 'POST',
                     headers: {
@@ -149,6 +190,15 @@ function setupAuthForms(updateAppState) {
                 }
 
                 const data = await response.json();
+                console.log("Inscription réussie pour:", data.username);
+
+                // Récupérer l'ID de session de la réponse ou des en-têtes
+                const sessionId = response.headers.get('X-Session-ID') || data.sessionId;
+                if (sessionId) {
+                    localStorage.setItem('session_id', sessionId);
+                } else {
+                    console.warn("Pas d'ID de session trouvé dans la réponse");
+                }
 
                 // Mettre à jour l'état
                 updateAppState({
@@ -165,14 +215,15 @@ function setupAuthForms(updateAppState) {
                 // Réinitialiser le formulaire
                 registerForm.reset();
 
-                // Rediriger vers la page d'accueil si ce n'est pas déjà le cas
-                if (window.location.pathname !== '/') {
-                    window.location.href = '/';
-                }
+                // Recharger la page complètement pour s'assurer que tout est mis à jour
+                window.location.reload();
             } catch (error) {
                 console.error('Erreur d\'inscription:', error);
                 const errorMessage = error.message || "Erreur d'inscription";
                 alert(errorMessage);
+
+                // Réactiver le formulaire
+                Array.from(registerForm.elements).forEach(el => el.disabled = false);
             }
         });
     }
@@ -182,12 +233,25 @@ function setupAuthForms(updateAppState) {
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
             try {
-                const response = await fetch('/api/logout', { method: 'POST' });
+                console.log("Tentative de déconnexion");
+                const sessionId = localStorage.getItem('session_id');
+
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${sessionId}`
+                    }
+                });
 
                 if (!response.ok) {
                     const errorMsg = await parseResponseError(response);
                     throw new Error(errorMsg);
                 }
+
+                console.log("Déconnexion réussie");
+
+                // Supprimer le token du localStorage
+                localStorage.removeItem('session_id');
 
                 // Mettre à jour l'état
                 updateAppState({

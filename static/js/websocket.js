@@ -1,17 +1,23 @@
 // Initialiser la connexion WebSocket
 export function initWebSocket(state, messageHandler) {
     try {
-        // Récupérer le token de session
-        const sessionId = getSessionIdFromCookie();
-
-        if (!sessionId) {
-            console.error('Aucun token de session trouvé pour WebSocket');
+        // Ne pas initialiser le WebSocket si l'utilisateur n'est pas authentifié
+        if (!state.isAuthenticated || !state.currentUser) {
+            console.log('Utilisateur non authentifié, WebSocket non initialisé');
             return null;
         }
 
-        // Créer l'URL WebSocket
+        // Récupérer le token de session depuis localStorage
+        const sessionId = localStorage.getItem('session_id');
+
+        if (!sessionId) {
+            console.error('Aucun token de session trouvé dans localStorage pour WebSocket');
+            return null;
+        }
+
+        // Créer l'URL WebSocket avec le token
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws?token=${sessionId}`;
+        const wsUrl = `${protocol}//${window.location.host}/ws?ls_token=${sessionId}`;
 
         console.log('Tentative de connexion WebSocket à', wsUrl);
 
@@ -21,6 +27,17 @@ export function initWebSocket(state, messageHandler) {
         // Configurer les événements
         socket.onopen = () => {
             console.log('Connexion WebSocket établie');
+
+            // Envoyer un message test pour vérifier la connexion
+            try {
+                socket.send(JSON.stringify({
+                    type: 'connection_test',
+                    payload: { userId: state.currentUser.id }
+                }));
+                console.log('Message de test WebSocket envoyé');
+            } catch (error) {
+                console.error('Erreur lors de l\'envoi du message de test:', error);
+            }
         };
 
         socket.onmessage = (event) => {

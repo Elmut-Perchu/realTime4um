@@ -1,4 +1,3 @@
-// fichier: handlers/websocket.go
 package handlers
 
 import (
@@ -33,9 +32,39 @@ var (
 
 // Client représente un client WebSocket connecté
 type Client struct {
-	UserID int
-	Conn   *websocket.Conn
-	Send   chan []byte
+	UserID   int
+	Conn     *websocket.Conn
+	Send     chan []byte
+	closed   bool       // Indique si le canal est fermé
+	closeMux sync.Mutex // Mutex pour protéger l'accès au champ closed
+}
+
+// SafeClose ferme le canal de manière sécurisée
+func (c *Client) SafeClose() {
+	c.closeMux.Lock()
+	defer c.closeMux.Unlock()
+
+	if !c.closed {
+		close(c.Send)
+		c.closed = true
+	}
+}
+
+// SafeSend envoie un message de manière sécurisée
+func (c *Client) SafeSend(message []byte) bool {
+	c.closeMux.Lock()
+	defer c.closeMux.Unlock()
+
+	if c.closed {
+		return false
+	}
+
+	select {
+	case c.Send <- message:
+		return true
+	default:
+		return false
+	}
 }
 
 // Message représente un message WebSocket
@@ -71,13 +100,14 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 		Conn:   conn,
 		Send:   make(chan []byte, 256),
+		closed: false,
 	}
 
 	// Enregistrer le client
 	clientsMutex.Lock()
 	// Fermer la connexion précédente si elle existe
 	if existingClient, ok := clients[userID]; ok {
-		close(existingClient.Send)
+		existingClient.SafeClose()
 		existingClient.Conn.Close()
 	}
 	clients[userID] = client
@@ -99,7 +129,9 @@ func (c *Client) readPump() {
 
 		// Supprimer le client de la map des clients
 		clientsMutex.Lock()
-		delete(clients, c.UserID)
+		if storedClient, exists := clients[c.UserID]; exists && storedClient == c {
+			delete(clients, c.UserID)
+		}
 		clientsMutex.Unlock()
 
 		// Mettre à jour le statut en ligne
@@ -111,8 +143,8 @@ func (c *Client) readPump() {
 		// Diffuser la mise à jour des utilisateurs en ligne
 		broadcastOnlineUsers()
 
-		// Fermer le canal d'envoi
-		close(c.Send)
+		// Fermer le canal d'envoi de manière sécurisée
+		c.SafeClose()
 	}()
 
 	// Configurer le WebSocket
@@ -123,7 +155,7 @@ func (c *Client) readPump() {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Erreur: %v", err)
+				log.Printf("Erreur de lecture WebSocket: %v", err)
 			}
 			break
 		}
@@ -167,6 +199,9 @@ func processMessage(senderID int, rawMessage []byte) {
 
 	// Traiter en fonction du type de message
 	switch message.Type {
+	case "connection_test":
+		// Ignorer les messages de test de connexion
+		log.Printf("Message de test reçu de l'utilisateur ID=%d", senderID)
 	case "private_message":
 		// Traiter l'envoi d'un message privé
 		handlePrivateMessage(senderID, message.Payload)
@@ -292,15 +327,12 @@ func sendToUser(userID int, message []byte) {
 	clientsMutex.RUnlock()
 
 	if ok {
-		select {
-		case client.Send <- message:
-			// Message envoyé avec succès
-		default:
-			// Le canal est plein ou fermé, supprimer le client
+		success := client.SafeSend(message)
+		if !success {
+			// Si l'envoi échoue, supprimer le client
 			clientsMutex.Lock()
 			delete(clients, userID)
 			clientsMutex.Unlock()
-			close(client.Send)
 		}
 	}
 }
@@ -311,12 +343,7 @@ func broadcastToAll(message []byte) {
 	defer clientsMutex.RUnlock()
 
 	for _, client := range clients {
-		select {
-		case client.Send <- message:
-			// Message envoyé avec succès
-		default:
-			// Le canal est plein ou fermé, cela sera nettoyé lors du prochain cycle de lecture
-		}
+		client.SafeSend(message)
 	}
 }
 

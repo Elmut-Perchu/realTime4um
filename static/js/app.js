@@ -100,25 +100,53 @@ function handleAuthenticationChange() {
 // Gestion des messages WebSocket
 function handleWebSocketMessage(event) {
     try {
+        console.log('Traitement du message WebSocket:', event.data);
         const message = JSON.parse(event.data);
 
         switch (message.type) {
             case 'online_users':
+                console.log('Mise à jour des utilisateurs en ligne:', message.payload.length, 'utilisateurs');
                 updateAppState({ onlineUsers: message.payload });
                 updateOnlineUsersList();
                 break;
+
             case 'private_message':
+                console.log('Message privé reçu de:', message.payload.senderUsername);
                 handlePrivateMessage(message.payload);
+
+                // Notifier l'utilisateur s'il n'est pas sur la page de messages
+                if (state.currentPage !== 'messages' ||
+                    (state.currentChatUser && state.currentChatUser.id !== message.payload.senderId)) {
+                    notifyUser('Nouveau message', `${message.payload.senderUsername}: ${message.payload.content}`);
+                }
                 break;
+
             case 'typing_indicator':
+                console.log('Indicateur de frappe:', message.payload.username, message.payload.isTyping ? 'tape' : 'a arrêté de taper');
                 handleTypingIndicator(message.payload);
                 break;
+
             case 'post_created':
+                console.log('Nouvelle publication créée:', message.payload.title);
                 handleNewPost(message.payload);
+
+                // Notifier l'utilisateur s'il est sur la page d'accueil
+                if (state.currentPage === 'home') {
+                    notifyUser('Nouvelle publication', `${message.payload.username} a créé une nouvelle publication: ${message.payload.title}`);
+                }
                 break;
+
             case 'comment_created':
+                console.log('Nouveau commentaire créé sur la publication:', message.payload.postId);
                 handleNewComment(message.payload);
+
+                // Notifier l'utilisateur s'il regarde cette publication
+                if (state.currentPage === 'post-detail' && state.currentPost && state.currentPost.id === message.payload.postId) {
+                    notifyUser('Nouveau commentaire', `${message.payload.username} a commenté cette publication`);
+                }
                 break;
+
+
             default:
                 console.log('Type de message non géré:', message.type);
         }
@@ -129,15 +157,23 @@ function handleWebSocketMessage(event) {
 
 // Gestion des messages privés reçus
 function handlePrivateMessage(message) {
-    const messagesList = document.getElementById('messages-list');
-    if (!messagesList) return;
+    console.log('Traitement du message privé:', message);
 
+    // Trouver ou créer la liste de messages
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) {
+        console.log('Liste de messages non trouvée, le message sera affiché lors du changement de page');
+        return;
+    }
+
+    // Déterminer si c'est la conversation courante
     const isCurrentChat = state.currentChatUser &&
         (message.senderId === state.currentChatUser.id ||
             message.receiverId === state.currentChatUser.id);
 
     // Si c'est la conversation courante, ajouter le message
     if (isCurrentChat) {
+        console.log('Affichage du message dans la conversation courante');
         const isSent = message.senderId === state.currentUser.id;
 
         const messageDiv = document.createElement('div');
@@ -153,14 +189,68 @@ function handlePrivateMessage(message) {
 
         messageDiv.appendChild(content);
         messageDiv.appendChild(time);
+
+        // Supprimer le message "Aucun message" s'il existe
+        const emptyMessage = messagesList.querySelector('.empty');
+        if (emptyMessage) {
+            messagesList.removeChild(emptyMessage);
+        }
+
         messagesList.appendChild(messageDiv);
 
         // Faire défiler vers le bas
         messagesList.scrollTop = messagesList.scrollHeight;
+    } else {
+        console.log('Message reçu pour une autre conversation');
     }
 
     // Mettre à jour la liste des utilisateurs avec le dernier message
     updateOnlineUsersList();
+}
+
+// Fonction pour notifier l'utilisateur
+function notifyUser(title, message) {
+    // Vérifier si les notifications sont supportées
+    if (!('Notification' in window)) {
+        console.log('Les notifications ne sont pas supportées par ce navigateur');
+        return;
+    }
+
+    // Vérifier la permission
+    if (Notification.permission === 'granted') {
+        // Créer la notification
+        createNotification(title, message);
+    } else if (Notification.permission !== 'denied') {
+        // Demander la permission
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                createNotification(title, message);
+            }
+        });
+    }
+}
+
+// Créer une notification
+function createNotification(title, message) {
+    try {
+        const notification = new Notification(title, {
+            body: message,
+            icon: '/favicon.ico'
+        });
+
+        // Fermer automatiquement après 5 secondes
+        setTimeout(() => {
+            notification.close();
+        }, 5000);
+
+        // Ouvrir l'application au clic sur la notification
+        notification.onclick = function () {
+            window.focus();
+            this.close();
+        };
+    } catch (error) {
+        console.error('Erreur lors de la création de la notification:', error);
+    }
 }
 
 // Gestion des indicateurs de frappe
@@ -521,6 +611,34 @@ async function fetchUserById(userId) {
     }
 }
 
+// Fonction pour récupérer les publications par catégorie
+async function fetchPostsByCategory(categoryId) {
+    try {
+        const postsContainer = document.getElementById('posts-container');
+        if (postsContainer) {
+            postsContainer.innerHTML = '<div class="loading">Chargement des publications...</div>';
+        }
+
+        const response = await fetch(`/api/posts?category=${categoryId}`);
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
+        const posts = await response.json();
+
+        updateAppState({ posts });
+        updatePostsList();
+    } catch (error) {
+        console.error('Erreur lors de la récupération des publications par catégorie:', error);
+
+        // Afficher un message d'erreur à l'utilisateur
+        const postsContainer = document.getElementById('posts-container');
+        if (postsContainer) {
+            postsContainer.innerHTML = '<div class="error">Erreur lors du chargement des publications. Veuillez réessayer.</div>';
+        }
+    }
+}
+
 // Mise à jour de la liste des publications
 function updatePostsList() {
     const postsContainer = document.getElementById('posts-container');
@@ -581,7 +699,7 @@ function updatePostsList() {
     });
 }
 
-// Mise à jour de la liste des catégories
+// Mise à jour de la liste des catégories - Version corrigée
 function updateCategoriesList() {
     const categoriesContainer = document.getElementById('categories-container');
     if (!categoriesContainer) return;
@@ -596,9 +714,23 @@ function updateCategoriesList() {
     state.categories.forEach(category => {
         const categoryCard = document.createElement('div');
         categoryCard.className = 'category-card';
-        categoryCard.onclick = () => {
-            // Rediriger vers la page d'accueil avec le filtre de catégorie
-            window.location.href = `/?category=${category.id}`;
+
+        // Corriger le comportement de clic sur une catégorie
+        categoryCard.onclick = (e) => {
+            e.preventDefault(); // Empêcher la navigation par défaut
+
+            // Filtrer les publications par catégorie, mais rester sur le site
+            const url = new URL(window.location.origin);
+            url.searchParams.set('category', category.id);
+
+            // Mettre à jour l'URL sans recharger la page
+            window.history.pushState({}, '', url);
+
+            // Charger les publications de cette catégorie
+            fetchPostsByCategory(category.id);
+
+            // Rediriger vers la page d'accueil pour afficher les résultats
+            navigateTo('home');
         };
 
         const name = document.createElement('div');
