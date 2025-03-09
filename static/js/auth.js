@@ -15,6 +15,7 @@ export async function initAuth(state, updateAppState) {
     setupAuthForms(updateAppState);
 }
 
+
 // Analyser l'erreur de réponse
 async function parseResponseError(response) {
     try {
